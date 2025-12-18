@@ -14,7 +14,7 @@
  */
  void audio_i2s_init(uint data_pin, uint clock_pin_base, uint simple_rate);
 
-void audio_i2s_set_simplerate(uint sample_rate);
+void audio_i2s_reset(uint sample_rate, uint channels);
 
 /**
  * @brief 将 32 位立体声样本推送到 PIO FIFO。

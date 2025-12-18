@@ -15,10 +15,10 @@
 #define chanDMA_play 0
 
 // --- 缓存区定义 ---
-int16_t buffer_A[BUFFER_SIZE];
-int16_t buffer_B[BUFFER_SIZE];
-int16_t* pNextBuffer = buffer_A;  // 指向正在等待填充的缓存
-int16_t* pPlayBuffer = buffer_B;  // 指向正在“播放”的缓存
+drflac_int32 buffer_A[BUFFER_SIZE];
+drflac_int32 buffer_B[BUFFER_SIZE];
+drflac_int32* pNextBuffer = buffer_A;  // 指向正在等待填充的缓存
+drflac_int32* pPlayBuffer = buffer_B;  // 指向正在“播放”的缓存
 // --- 状态控制 ---
 drflac* pFlac = NULL;
 File audioFile;
@@ -50,22 +50,23 @@ void dmaPlay_irq_handler(){
           Serial.println("--- 播放结束 ---"); 
           return;
       } 
-      int16_t* temp = pPlayBuffer;
+      drflac_int32* temp = pPlayBuffer;
       pPlayBuffer = pNextBuffer;
       pNextBuffer = temp;
 
       dma_channel_set_read_addr(chanDMA_play, pPlayBuffer, false);
-      dma_channel_set_trans_count(chanDMA_play, framesRead, true);
+      dma_channel_set_trans_count(chanDMA_play, framesRead * pFlac->channels, true);
 
-      framesRead = drflac_read_pcm_frames_s16(pFlac, PCM_FRAME_COUNT, pNextBuffer);
+      framesRead = drflac_read_pcm_frames_s32(pFlac, PCM_FRAME_COUNT, pNextBuffer);
+
 };
 
 
 
-void setupDMAChain(uint channel) {
+void setupDMAChain(uint bits) {
 
     dma_channel_config cfgDMA_play = dma_channel_get_default_config(chanDMA_play);
-    channel_config_set_transfer_data_size(&cfgDMA_play, channel == 1 ? DMA_SIZE_16 : DMA_SIZE_32);
+    channel_config_set_transfer_data_size(&cfgDMA_play, bits == 16 ? DMA_SIZE_16 : DMA_SIZE_32);
     channel_config_set_dreq(&cfgDMA_play, pio_get_dreq(pio0, 0, true));
     channel_config_set_read_increment(&cfgDMA_play, true);
     channel_config_set_write_increment(&cfgDMA_play, false);
@@ -94,23 +95,22 @@ void setup() {
     //打开音频文件
     audioFile = LittleFS.open("/sb4.flac", "r");
     pFlac = drflac_open(lfs_read_proc, lfs_seek_proc, NULL, &audioFile, NULL);
+    delay(500);
     Serial.printf("正在播放: %uHz  %uBits  %u声道\n", pFlac->sampleRate, pFlac->bitsPerSample, pFlac->channels);
     if (pFlac) {
         //设置
-        audio_i2s_set_simplerate(pFlac->sampleRate);
-        setupDMAChain(pFlac->channels);
+        audio_i2s_reset(pFlac->sampleRate, pFlac->channels);
+        setupDMAChain(pFlac->bitsPerSample);
         //预解码
-        framesRead = drflac_read_pcm_frames_s16(pFlac, PCM_FRAME_COUNT, pNextBuffer);
+        framesRead = drflac_read_pcm_frames_s32(pFlac, PCM_FRAME_COUNT, pNextBuffer);
         //交换缓存指针
-        int16_t* temp = pPlayBuffer;
+        drflac_int32* temp = pPlayBuffer;
         pPlayBuffer = pNextBuffer;
         pNextBuffer = temp;
 
         dma_channel_set_read_addr(chanDMA_play, pPlayBuffer, false);
-        dma_channel_set_trans_count(chanDMA_play, framesRead, true);
+        dma_channel_set_trans_count(chanDMA_play, framesRead * pFlac->channels, true);
         irq_set_enabled(DMA_IRQ_0, true);
-
-
     }
 }
 

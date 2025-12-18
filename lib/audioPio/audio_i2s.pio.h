@@ -13,31 +13,44 @@
 // --------- //
 
 #define audio_i2s_wrap_target 0
-#define audio_i2s_wrap 11
+#define audio_i2s_wrap 22
 
-#define audio_i2s_offset_entry_point 11u
+#define audio_i2s_offset_entry_point 17u
+#define audio_i2s_offset_stereo 19u
+#define audio_i2s_offset_single 21u
 
 static const uint16_t audio_i2s_program_instructions[] = {
             //     .wrap_target
-    0xb842, //  0: nop                    side 2     
-    0x6201, //  1: out    pins, 1                [2] 
-    0x1f40, //  2: jmp    x--, 0          side 3 [3] 
-    0xb042, //  3: nop                    side 0     
-    0x6201, //  4: out    pins, 1                [2] 
-    0xf72e, //  5: set    x, 14           side 1 [3] 
-    0xb042, //  6: nop                    side 0     
-    0x6201, //  7: out    pins, 1                [2] 
-    0x1746, //  8: jmp    x--, 6          side 1 [3] 
-    0xb842, //  9: nop                    side 2     
-    0x6201, // 10: out    pins, 1                [2] 
-    0xff2e, // 11: set    x, 14           side 3 [3] 
+    0x1863, //  0: jmp    !y, 3           side 2     
+    0x80a0, //  1: pull   block                      
+    0x0006, //  2: jmp    6                          
+    0xa042, //  3: nop                               
+    0x0006, //  4: jmp    6                          
+    0xba42, //  5: nop                    side 2 [2] 
+    0x6001, //  6: out    pins, 1                    
+    0x1f45, //  7: jmp    x--, 5          side 3 [3] 
+    0xb042, //  8: nop                    side 0     
+    0x6201, //  9: out    pins, 1                [2] 
+    0xf63e, // 10: set    x, 30           side 1 [2] 
+    0x80a0, // 11: pull   block                      
+    0xb242, // 12: nop                    side 0 [2] 
+    0x6001, // 13: out    pins, 1                    
+    0x174c, // 14: jmp    x--, 12         side 1 [3] 
+    0xba42, // 15: nop                    side 2 [2] 
+    0x6001, // 16: out    pins, 1                    
+    0xfe3e, // 17: set    x, 30           side 3 [2] 
+    0x0000, // 18: jmp    0                          
+    0xe041, // 19: set    y, 1                       
+    0x0000, // 20: jmp    0                          
+    0xe040, // 21: set    y, 0                       
+    0x0000, // 22: jmp    0                          
             //     .wrap
 };
 
 #if !PICO_NO_HARDWARE
 static const struct pio_program audio_i2s_program = {
     .instructions = audio_i2s_program_instructions,
-    .length = 12,
+    .length = 23,
     .origin = -1,
 };
 
@@ -47,18 +60,5 @@ static inline pio_sm_config audio_i2s_program_get_default_config(uint offset) {
     sm_config_set_sideset(&c, 3, true, false);
     return c;
 }
-
-static inline void audio_i2s_program_init(PIO pio, uint sm, uint offset, uint data_pin, uint clock_pin_base) {
-    pio_sm_config sm_config = audio_i2s_program_get_default_config(offset);
-    sm_config_set_out_pins(&sm_config, data_pin, 1);
-    sm_config_set_sideset_pins(&sm_config, clock_pin_base);
-    sm_config_set_out_shift(&sm_config, false, true, 32);
-    pio_sm_init(pio, sm, offset, &sm_config);
-    uint pin_mask = (1u << data_pin) | (3u << clock_pin_base);
-    pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
-    pio_sm_set_pins(pio, sm, 0); // clear pins
-    pio_sm_exec(pio, sm, pio_encode_jmp(offset + audio_i2s_offset_entry_point));
-}
-
 #endif
 
