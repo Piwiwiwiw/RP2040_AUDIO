@@ -1,7 +1,6 @@
 #include <SimpleFSTerminal.h>
 
 I2S i2s(OUTPUT);
-BackgroundAudioMP3 audioEncoder;
 File audioFile;
 uint8_t buffer[16384];
 

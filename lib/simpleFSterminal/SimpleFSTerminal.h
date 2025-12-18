@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 #include <LittleFS.h>
-#include <BackgroundAudio.h>
 #include <I2S.h>
 
 class SimpleFSTerminal {
