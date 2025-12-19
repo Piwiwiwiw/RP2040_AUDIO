@@ -3,6 +3,9 @@
 
 
 #include "dr_flac.h"
+#include "dr_mp3.h"
+
+
 #include <Arduino.h>
 #include <hardware/dma.h>
 #include <hardware/irq.h>
@@ -13,11 +16,30 @@
 
 
 
-#define PCM_FRAME_COUNT 4096   // 每个缓存区的帧数
+#define PCM_FRAME_COUNT 2048   // 每个缓存区的帧数
 #define CHANNELS 2             // 假设双声道
 #define BUFFER_SIZE (PCM_FRAME_COUNT * CHANNELS)
 
 
+enum format{
+    wav = 0,
+    flac = 1,
+    mp3 = 2,
+};
+
+
+
+union AudioBuffer {
+    drflac_int32    bufferFlac[BUFFER_SIZE]; // 32-bit buffer
+    drmp3_int16     bufferMP3[BUFFER_SIZE * 2]; // 16-bit buffer (twice the number of 16-bit elements)
+};
+
+
+
+union BufferPtr {
+    drflac_int32* flacBuffer;
+    drmp3_int16* mp3Buff;
+};
 
 
 class AudioPlayer {
@@ -27,7 +49,7 @@ public:
     ~AudioPlayer();
     // 播放音频文件
     void init() {audioI2S.initialize();}
-    int play(const String& path);
+    int play(const String& path, format mode);
 
     
 private:
@@ -36,14 +58,19 @@ private:
     void setupDMAChain(uint bits);
     // 文件读写回调
     static size_t lfsReadProc(void* pUserData, void* pBufferOut, size_t bytesToRead);
+    
     static drflac_bool32 lfsSeekProc(void* pUserData, int offset, drflac_seek_origin origin);
+    static drmp3_bool32 lfsSeekProc(void* pUserData, int offset, drmp3_seek_origin origin);
     // 成员变量
-    uint dmaChannel; 
-    drflac_int32 buffer_A[BUFFER_SIZE];
-    drflac_int32 buffer_B[BUFFER_SIZE];
-    drflac_int32* pNextBuffer;
-    drflac_int32* pPlayBuffer;
+    uint dmaChannel;
+    format form; 
+    AudioBuffer buffer_A;
+    AudioBuffer buffer_B;
+    BufferPtr pNextBuffer;
+    BufferPtr pPlayBuffer;
     drflac* pFlac;
+    drmp3   MP3;
+    drmp3*  pMP3 = &MP3;
     File audioFile;
     bool bufferReady;
     bool isPlaying;

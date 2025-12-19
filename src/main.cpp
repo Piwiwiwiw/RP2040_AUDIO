@@ -16,7 +16,8 @@ void setup() {
 
 
 void loop() {
-    AudioOutput.play("sb4.flac");
+    Serial.println(AudioOutput.play("JI.mp3", mp3));
+
     delay(1000);
     Serial.printf("播放中");
 }
