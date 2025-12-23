@@ -6,13 +6,13 @@
 
 
 // 构造函数
-AudioI2S::AudioI2S(PIO pio, uint sm, uint data_pin, uint clock_pin_base)
-    : pio(pio), sm(sm), data_pin(data_pin), clock_pin_base(clock_pin_base) {
+AudioI2S::AudioI2S(PIO _pio, uint _sm, uint _data_pin, uint _clock_pin_base)
+    : pio(_pio), sm(_sm), data_pin(_data_pin), clock_pin_base(_clock_pin_base) {
 }
 
 
 AudioI2S::AudioI2S(){
-        pio = pio0, sm = 0, data_pin = 14, clock_pin_base = 15;
+        pio = pio1, sm = 4, data_pin = 14, clock_pin_base = 15;
 }
      
 
@@ -28,8 +28,6 @@ AudioI2S::~AudioI2S() {
 void AudioI2S::initialize() {
     // 加载 PIO 程序
     offset = pio_add_program(pio, &audio_i2s_program);
-
-    // 获取默认配置
     pio_sm_config sm_config = audio_i2s_program_get_default_config(offset);
 
     // 配置引脚
@@ -48,9 +46,9 @@ void AudioI2S::initialize() {
     uint pin_mask = (1u << data_pin) | (3u << clock_pin_base);
     pio_sm_set_pindirs_with_mask(pio, sm, pin_mask, pin_mask);
     pio_sm_set_pins(pio, sm, 0);
-    gpio_set_function(data_pin, GPIO_FUNC_PIO0);
-    gpio_set_function(clock_pin_base, GPIO_FUNC_PIO0);
-    gpio_set_function(clock_pin_base + 1, GPIO_FUNC_PIO0);
+    gpio_set_function(data_pin, pio==pio0?GPIO_FUNC_PIO0:GPIO_FUNC_PIO1);
+    gpio_set_function(clock_pin_base, pio==pio0?GPIO_FUNC_PIO0:GPIO_FUNC_PIO1);
+    gpio_set_function(clock_pin_base + 1, pio==pio0?GPIO_FUNC_PIO0:GPIO_FUNC_PIO1);
     // 启动状态机并跳转到入口点
     pio_sm_exec(pio, sm, pio_encode_jmp(offset + audio_i2s_offset_entry_point));
     pio_sm_set_enabled(pio, sm, true);

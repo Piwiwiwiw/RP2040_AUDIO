@@ -2,9 +2,11 @@
 #define SIMPLE_FS_TERMINAL_H
 
 #include <Arduino.h>
-#include <LittleFS.h>
-#include <I2S.h>
-
+#include <SD.h>
+#include <AudioPlay.h>
+#define SD_CLK_PIN 8
+#define SD_CMD_PIN 9
+#define SD_DATA_PIN 10
 class SimpleFSTerminal {
 public:
     static void begin();

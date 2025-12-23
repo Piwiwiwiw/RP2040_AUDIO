@@ -14,7 +14,9 @@
 
 
 
-
+#define SD_CLK_PIN 8
+#define SD_CMD_PIN 9
+#define SD_DATA_PIN 10
 
 #define PCM_FRAME_COUNT 2048   // 每个缓存区的帧数
 #define CHANNELS 2             // 假设双声道
@@ -45,12 +47,11 @@ union BufferPtr {
 class AudioPlayer {
 public:
     // 构造函数：接受 PIO、状态机编号、DMA 通道、I2S 数据引脚和时钟引脚
-    AudioPlayer(PIO pio, uint sm, uint dmaChannel, uint i2sDataPin, uint i2sClockPin);
+    AudioPlayer(PIO pio, uint dmaChannel, uint i2sDataPin, uint i2sClockPin);
     ~AudioPlayer();
     // 播放音频文件
-    void init() {audioI2S.initialize();}
-    int play(const String& path, format mode);
-
+    int play(File* audio, format mode);
+    bool getStatus() {return isPlaying;}
     
 private:
     // DMA中断处理程序
@@ -71,7 +72,7 @@ private:
     drflac* pFlac;
     drmp3   MP3;
     drmp3*  pMP3 = &MP3;
-    File audioFile;
+    File* audioFile;
     bool bufferReady;
     bool isPlaying;
     uint32_t framesRead;

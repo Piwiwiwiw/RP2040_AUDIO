@@ -1,29 +1,62 @@
 #include <SimpleFSTerminal.h>
 
-I2S i2s(OUTPUT);
-File audioFile;
-uint8_t buffer[16384];
 
-#include <PWMAudio.h>
-PWMAudio audio(0);
+AudioPlayer* pAudio;
 String SimpleFSTerminal::currentDir = "/";
 
 
+String getSDType(uint8_t type) {
+    switch (type) {
+        case 1: return "SD1";
+        case 2: return "SD2";
+        case 3: return "SDHC";
+        default: return "Unknown";
+    }
+}
+
+
+String getFatType(uint8_t fatType) {
+    switch (fatType) {
+        case 1: return "FAT12";
+        case 2: return "FAT16";
+        case 3: return "FAT32";
+        default: return "Unknown";
+    }
+}
+
+
+uint64_t getUsedSpace() {
+    uint64_t totalSpace = SD.size64();
+    uint64_t freeSpace = SD.totalBlocks() * SD.blockSize() - SD.totalClusters() * SD.clusterSize();
+    return totalSpace - freeSpace;
+}
+
+
+String SimpleFSTerminal::getFullPath(const String& path) {
+    if (path.startsWith("/")) {
+        return path;
+    } else {
+        return currentDir + (currentDir.endsWith("/") ? "" : "/") + path;
+    }
+}
+
 
 void SimpleFSTerminal::begin() {
-    if (!LittleFS.begin()) {
-        Serial.println("格式化文件系统...");
-        LittleFS.format();
-        LittleFS.begin();
+    delay(100);
+    if (!SD.begin(SD_CLK_PIN, SD_CMD_PIN, SD_DATA_PIN)) {
+        delay(100);
+        Serial.println("文件系统启动失败");
+        // SD.format();
+        // SD.begin();
     }
     Serial.println("文件系统就绪!");
     Serial.println("输入 'help' 查看命令");
     Serial.print(currentDir + "> ");
-    i2s.setBCLK(19);
-    i2s.setDOUT(18);
-    i2s.setStereo(true);
-    i2s.begin(44100);
+    
+    static AudioPlayer AudioOutput(pio1, 5, 5, 6);
+    pAudio = &AudioOutput;
 }
+
 
 void SimpleFSTerminal::processSerial() {
     static String input = "";
@@ -62,6 +95,7 @@ void SimpleFSTerminal::processSerial() {
     }
 }
 
+
 void SimpleFSTerminal::executeCommand(const String& cmd, const String& args) {
     if (cmd == "ls") ls(args);
     else if (cmd == "cd") cd(args);
@@ -86,9 +120,10 @@ void SimpleFSTerminal::executeCommand(const String& cmd, const String& args) {
     else Serial.println("未知命令");
 }
 
+
 void SimpleFSTerminal::ls(const String& path) {
     String fullPath = getFullPath(path);
-    File dir = LittleFS.open(fullPath, "r");
+    File dir = SD.open(fullPath, "r");
     
     if (!dir || !dir.isDirectory()) {
         Serial.println("目录不存在");
@@ -109,6 +144,7 @@ void SimpleFSTerminal::ls(const String& path) {
     dir.close();
 }
 
+
 void SimpleFSTerminal::cd(const String& path) {
     if (path == "..") {
         int lastSlash = currentDir.lastIndexOf('/');
@@ -119,7 +155,7 @@ void SimpleFSTerminal::cd(const String& path) {
         currentDir = "/";
     } else if (path.length() > 0) {
         String newPath = getFullPath(path);
-        File dir = LittleFS.open(newPath, "r");
+        File dir = SD.open(newPath, "r");
         if (dir && dir.isDirectory()) {
             currentDir = newPath;
         } else {
@@ -130,27 +166,30 @@ void SimpleFSTerminal::cd(const String& path) {
     Serial.println("当前目录: " + currentDir);
 }
 
+
 void SimpleFSTerminal::mkdir(const String& path) {
     String fullPath = getFullPath(path);
-    if (LittleFS.mkdir(fullPath)) {
+    if (SD.mkdir(fullPath)) {
         Serial.println("目录创建成功");
     } else {
         Serial.println("目录创建失败");
     }
 }
 
+
 void SimpleFSTerminal::rm(const String& path) {
     String fullPath = getFullPath(path);
-    if (LittleFS.remove(fullPath)) {
+    if (SD.remove(fullPath)) {
         Serial.println("删除成功");
     } else {
         Serial.println("删除失败");
     }
 }
 
+
 void SimpleFSTerminal::cat(const String& path) {
     String fullPath = getFullPath(path);
-    File file = LittleFS.open(fullPath, "r");
+    File file = SD.open(fullPath, "r");
     
     if (!file || file.isDirectory()) {
         Serial.println("文件不存在");
@@ -164,32 +203,41 @@ void SimpleFSTerminal::cat(const String& path) {
     file.close();
 }
 
+
+
 void SimpleFSTerminal::play(const String& path){
-    if(audioFile) audioFile.close();
+
     Serial.printf("开始播放\n");
     String fullPath = getFullPath(path);
-    audioFile = LittleFS.open(fullPath, "r");
+    int dotIndex = path.lastIndexOf('.');
+    format fmt;
+    if(dotIndex != -1) {
+        String extension = path.substring(dotIndex + 1);
+
+        // 根据后缀名设置枚举值
+        if(extension.equalsIgnoreCase("mp3")) {
+            fmt = mp3;
+        } else if(extension.equalsIgnoreCase("wav")) {
+            fmt = wav;
+        } else if(extension.equalsIgnoreCase("flac")) {
+            fmt = flac;
+        } else {
+            Serial.printf("未知的文件格式: %s\n", extension.c_str());
+            return;
+        }
+    }
+    File audioFile = SD.open(fullPath, "r");
     if(!audioFile)
       Serial.printf("无指定文件\n");
     else{
-      audioEncoder.setDevice(&audio);
-      audioEncoder.begin();
-      Serial.printf("%d to Write\n", audioEncoder.availableForWrite());
-      while(audioFile){
-        while(audioFile && audioEncoder.availableForWrite() > 4096){
-            int len = audioFile.read(buffer, 4096);
-            audioEncoder.write(buffer, len);
-            if (len < 4096) audioFile.close();
-         }
-      }
+      pAudio->play(&audioFile, fmt);
     }
-    audioEncoder.end();
-    Serial.printf("结束\n");
 }
+
 
 void SimpleFSTerminal::writeFile(const String& path, const String& content) {
     String fullPath = getFullPath(path);
-    File file = LittleFS.open(fullPath, "w");
+    File file = SD.open(fullPath, "w");
     
     if (file) {
         file.print(content);
@@ -199,6 +247,7 @@ void SimpleFSTerminal::writeFile(const String& path, const String& content) {
         Serial.println("写入失败");
     }
 }
+
 
 void SimpleFSTerminal::showHelp() {
     Serial.println("可用命令:");
@@ -213,22 +262,21 @@ void SimpleFSTerminal::showHelp() {
     Serial.println("  clear/cls   - 清屏");
 }
 
+
 void SimpleFSTerminal::showInfo() {
-    FSInfo info;
-    if (LittleFS.info(info)) {
-        Serial.print("总空间: ");
-        Serial.println(info.totalBytes);
-        Serial.print("已用空间: ");
-        Serial.println(info.usedBytes);
-        Serial.print("使用率: ");
-        Serial.println((info.usedBytes * 100) / info.totalBytes);
-    }
+    // 获取并打印 SD 卡的信息
+        Serial.print("SD Type: ");
+        Serial.println(getSDType(SD.type()));
+    
+        Serial.print("SD FAT Type: ");
+        Serial.println(getFatType(SD.fatType()));
+    
+        Serial.print("Card Size (Bytes): ");
+        Serial.println(SD.size64());
+    
+        Serial.print("Used Space (Bytes): ");
+        Serial.println(getUsedSpace());
 }
 
-String SimpleFSTerminal::getFullPath(const String& path) {
-    if (path.startsWith("/")) {
-        return path;
-    } else {
-        return currentDir + (currentDir.endsWith("/") ? "" : "/") + path;
-    }
-}
+
+

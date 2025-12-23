@@ -1,25 +1,20 @@
 #define DR_FLAC_IMPLEMENTATION
 #define DR_FLAC_NO_CRC
-
 #define DR_MP3_IMPLEMENTATION
-
 #include "AudioPlay.h"
-
-
-
-
-
 AudioPlayer* AudioPlayer::instance = nullptr;
 
 
 // 构造函数
-AudioPlayer::AudioPlayer(PIO pio, uint sm, uint dmaChannel, uint i2sDataPin, uint i2sClockPin)
+AudioPlayer::AudioPlayer(PIO pio, uint dmaChannel, uint i2sDataPin, uint i2sClockPin)
     : dmaChannel(dmaChannel),
       pFlac(nullptr), bufferReady(false), 
       framesRead(0), 
-      isPlaying(false),
-      audioI2S(pio, sm, i2sDataPin, i2sClockPin){
-
+      isPlaying(false)
+      {
+      uint sm= pio_claim_unused_sm(pio, true);
+      audioI2S = AudioI2S(pio, sm, i2sDataPin, i2sClockPin);
+      audioI2S.initialize();
       instance = this;
 
 }
@@ -53,12 +48,10 @@ drmp3_bool32 AudioPlayer::lfsSeekProc(void* pUserData, int offset, drmp3_seek_or
 
 // DMA中断处理程序
 void AudioPlayer::dmaPlayIrqHandler() {
-    dma_channel_acknowledge_irq0(instance->dmaChannel);
+    dma_channel_acknowledge_irq1(instance->dmaChannel);
     if (!instance->framesRead) {
-        irq_set_enabled(DMA_IRQ_0, false);
+        dma_channel_set_irq1_enabled(instance->dmaChannel, false);
         irq_remove_handler(DMA_IRQ_0, dmaPlayIrqHandler);
-
-
         if (instance->pFlac) {
             drflac_close(instance->pFlac);
             instance->pFlac = NULL;
@@ -68,14 +61,12 @@ void AudioPlayer::dmaPlayIrqHandler() {
         }
 
         if (instance->audioFile) {
-            instance->audioFile.close();
+            instance->audioFile = nullptr;
         }
-
-        Serial.print("播放完成\n");
         instance->isPlaying = false;
         return;
     }
-
+    
     switch(instance->form){
         case wav:
              break;
@@ -94,6 +85,8 @@ void AudioPlayer::dmaPlayIrqHandler() {
     }
 }
 
+
+
 // 设置DMA链
 void AudioPlayer::setupDMAChain(uint bits) {
     dma_channel_config cfgDMA_play = dma_channel_get_default_config(dmaChannel);
@@ -110,10 +103,10 @@ void AudioPlayer::setupDMAChain(uint bits) {
 
 
 // 播放音频文件
-int AudioPlayer::play(const String& path, format mode) {
+int AudioPlayer::play(File* audio, format mode) {
     form = mode;
     if(isPlaying) return 0;
-    audioFile = LittleFS.open(path, "r");
+    audioFile = audio;
     if(!audioFile){
         Serial.println("打开文件失败");
         return -1;
@@ -122,9 +115,8 @@ int AudioPlayer::play(const String& path, format mode) {
         case wav: 
             break;
         case flac: 
-            pFlac = drflac_open(lfsReadProc, lfsSeekProc, NULL, &audioFile, NULL);
+            pFlac = drflac_open(lfsReadProc, lfsSeekProc, NULL, audioFile, NULL);
             if(pFlac){
-                Serial.printf("正在播放flac: %uHz  %uBits  %u声道\n", pFlac->sampleRate, pFlac->bitsPerSample, pFlac->channels);
                 audioI2S.reset(pFlac->sampleRate, pFlac->channels);
                 setupDMAChain(pFlac->bitsPerSample);
                 pNextBuffer.flacBuffer = buffer_A.bufferFlac;
@@ -135,15 +127,11 @@ int AudioPlayer::play(const String& path, format mode) {
                 dma_channel_set_trans_count(dmaChannel, framesRead * pFlac->channels, true);
                 irq_set_enabled(DMA_IRQ_0, true);
                 isPlaying = true;
-                return 1;
             }
-            Serial.println(".Flac打开失败");
             break;
         case mp3:
 
-            if(drmp3_init(pMP3, lfsReadProc, lfsSeekProc, NULL, NULL, &audioFile, NULL)){
-                delay(2000);
-                Serial.printf("正在播放mp3: %uHz  %uBits  %u声道\n", pMP3->sampleRate, 16, pMP3->channels);
+            if(drmp3_init(pMP3, lfsReadProc, lfsSeekProc, NULL, NULL, audioFile, NULL)){
                 audioI2S.reset(pMP3->sampleRate, pMP3->channels);
                 setupDMAChain(16);
                 pNextBuffer.mp3Buff = buffer_A.bufferMP3;
@@ -154,12 +142,12 @@ int AudioPlayer::play(const String& path, format mode) {
                 dma_channel_set_trans_count(dmaChannel, framesRead * pMP3->channels, true);
                 irq_set_enabled(DMA_IRQ_0, true);
                 isPlaying = true;
-                return 1;
             }
-            Serial.println(".mp3打开失败");
             break;
         default:
             break;
     }
-    return -1;
+    while(isPlaying)
+        delay(50);
+    return 0;
 }
