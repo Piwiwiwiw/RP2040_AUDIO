@@ -16,7 +16,7 @@ AudioPlayer::AudioPlayer(PIO pio, uint dmaChannel, uint i2sDataPin, uint i2sCloc
       audioI2S = AudioI2S(pio, sm, i2sDataPin, i2sClockPin);
       audioI2S.initialize();
       instance = this;
-
+      setGain(9880);
 }
 
 
@@ -75,16 +75,20 @@ void AudioPlayer::dmaPlayIrqHandler() {
             dma_channel_set_read_addr(instance->dmaChannel, instance->pPlayBuffer.flacBuffer, false);
             dma_channel_set_trans_count(instance->dmaChannel, instance->framesRead * instance->pFlac->channels, true);
             instance->framesRead = drflac_read_pcm_frames_s32(instance->pFlac, PCM_FRAME_COUNT, instance->pNextBuffer.flacBuffer);
+            for(int i = 0; i < instance->framesRead * instance->pFlac->channels; i++){ 
+                instance->pNextBuffer.flacBuffer[i] = ((int64_t)(instance->pNextBuffer.flacBuffer[i]) * (uint64_t)instance->gain) >> 14;
+            }
             break;
         case mp3:
             std::swap(instance->pPlayBuffer.mp3Buff, instance->pNextBuffer.mp3Buff);
             dma_channel_set_read_addr(instance->dmaChannel, instance->pPlayBuffer.mp3Buff, false);
             dma_channel_set_trans_count(instance->dmaChannel, instance->framesRead * instance->pMP3->channels, true);
-            instance->framesRead = drmp3_read_pcm_frames_s16(instance->pMP3, PCM_FRAME_COUNT, instance->pNextBuffer.mp3Buff);
+            for(int i = 0; i < instance->framesRead * instance->pMP3->channels; i++){ 
+                instance->pNextBuffer.mp3Buff[i] = ((int32_t)(instance->pNextBuffer.mp3Buff[i]) * (uint32_t)instance->gain) >> 14;
+            }
             break;
     }
 }
-
 
 
 // 设置DMA链
@@ -122,6 +126,9 @@ int AudioPlayer::play(File* audio, format mode) {
                 pNextBuffer.flacBuffer = buffer_A.bufferFlac;
                 pPlayBuffer.flacBuffer = buffer_B.bufferFlac;
                 framesRead = drflac_read_pcm_frames_s32(pFlac, PCM_FRAME_COUNT, pNextBuffer.flacBuffer);
+                for(int i = 0; i < framesRead * pFlac->channels; i++){ 
+                    pNextBuffer.flacBuffer[i] = ((int64_t)(pNextBuffer.flacBuffer[i]) * (uint64_t)gain) >> 14;
+                }
                 std::swap(pPlayBuffer, pNextBuffer);
                 dma_channel_set_read_addr(dmaChannel, pPlayBuffer.flacBuffer, false);
                 dma_channel_set_trans_count(dmaChannel, framesRead * pFlac->channels, true);
@@ -137,6 +144,9 @@ int AudioPlayer::play(File* audio, format mode) {
                 pNextBuffer.mp3Buff = buffer_A.bufferMP3;
                 pPlayBuffer.mp3Buff = buffer_B.bufferMP3;
                 framesRead = drmp3_read_pcm_frames_s16(pMP3, PCM_FRAME_COUNT, pNextBuffer.mp3Buff);
+                for(int i = 0; i < framesRead * pMP3->channels; i++){ 
+                    pNextBuffer.mp3Buff[i] = ((int32_t)(pNextBuffer.mp3Buff[i]) * (uint32_t)gain) >> 14;
+                }
                 std::swap(pPlayBuffer, pNextBuffer);
                 dma_channel_set_read_addr(dmaChannel, pPlayBuffer.mp3Buff, false);
                 dma_channel_set_trans_count(dmaChannel, framesRead * pMP3->channels, true);

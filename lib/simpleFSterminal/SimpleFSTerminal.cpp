@@ -53,7 +53,7 @@ void SimpleFSTerminal::begin() {
     Serial.println("输入 'help' 查看命令");
     Serial.print(currentDir + "> ");
     
-    static AudioPlayer AudioOutput(pio1, 5, 5, 6);
+    static AudioPlayer AudioOutput(pio1, 5, 3, 4);
     pAudio = &AudioOutput;
 }
 

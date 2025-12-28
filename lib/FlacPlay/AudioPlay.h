@@ -18,7 +18,7 @@
 #define SD_CMD_PIN 9
 #define SD_DATA_PIN 10
 
-#define PCM_FRAME_COUNT 2048   // 每个缓存区的帧数
+#define PCM_FRAME_COUNT 8196   // 每个缓存区的帧数
 #define CHANNELS 2             // 假设双声道
 #define BUFFER_SIZE (PCM_FRAME_COUNT * CHANNELS)
 
@@ -52,7 +52,7 @@ public:
     // 播放音频文件
     int play(File* audio, format mode);
     bool getStatus() {return isPlaying;}
-    
+    void setGain(int _gain) {gain = _gain;}
 private:
     // DMA中断处理程序
     static void dmaPlayIrqHandler();
@@ -73,6 +73,7 @@ private:
     drmp3   MP3;
     drmp3*  pMP3 = &MP3;
     File* audioFile;
+    uint16_t gain = 16384;
     bool bufferReady;
     bool isPlaying;
     uint32_t framesRead;
