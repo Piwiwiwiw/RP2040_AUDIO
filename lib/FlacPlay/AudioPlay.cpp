@@ -83,6 +83,7 @@ void AudioPlayer::dmaPlayIrqHandler() {
             std::swap(instance->pPlayBuffer.mp3Buff, instance->pNextBuffer.mp3Buff);
             dma_channel_set_read_addr(instance->dmaChannel, instance->pPlayBuffer.mp3Buff, false);
             dma_channel_set_trans_count(instance->dmaChannel, instance->framesRead * instance->pMP3->channels, true);
+            instance->framesRead = drmp3_read_pcm_frames_s16(instance->pMP3, PCM_FRAME_COUNT, instance->pNextBuffer.mp3Buff);
             for(int i = 0; i < instance->framesRead * instance->pMP3->channels; i++){ 
                 instance->pNextBuffer.mp3Buff[i] = ((int32_t)(instance->pNextBuffer.mp3Buff[i]) * (uint32_t)instance->gain) >> 14;
             }
@@ -139,6 +140,7 @@ int AudioPlayer::play(File* audio, format mode) {
         case mp3:
 
             if(drmp3_init(pMP3, lfsReadProc, lfsSeekProc, NULL, NULL, audioFile, NULL)){
+                Serial.printf("%d采样率， %d声道数\n", pMP3->sampleRate, pMP3->channels);
                 audioI2S.reset(pMP3->sampleRate, pMP3->channels);
                 setupDMAChain(16);
                 pNextBuffer.mp3Buff = buffer_A.bufferMP3;

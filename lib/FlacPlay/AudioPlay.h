@@ -18,7 +18,7 @@
 #define SD_CMD_PIN 9
 #define SD_DATA_PIN 10
 
-#define PCM_FRAME_COUNT 8196   // 每个缓存区的帧数
+#define PCM_FRAME_COUNT 2048   // 每个缓存区的帧数
 #define CHANNELS 2             // 假设双声道
 #define BUFFER_SIZE (PCM_FRAME_COUNT * CHANNELS)
 
