@@ -130,17 +130,17 @@ int AudioPlayer::play(File* audio, format mode) {
                 for(int i = 0; i < framesRead * pFlac->channels; i++){ 
                     pNextBuffer.flacBuffer[i] = ((int64_t)(pNextBuffer.flacBuffer[i]) * (uint64_t)gain) >> 14;
                 }
-                std::swap(pPlayBuffer, pNextBuffer);
+                std::swap(pPlayBuffer.flacBuffer, pNextBuffer.flacBuffer);
                 dma_channel_set_read_addr(dmaChannel, pPlayBuffer.flacBuffer, false);
                 dma_channel_set_trans_count(dmaChannel, framesRead * pFlac->channels, true);
                 irq_set_enabled(DMA_IRQ_0, true);
                 isPlaying = true;
+                framesRead = drflac_read_pcm_frames_s32(pFlac, PCM_FRAME_COUNT, pNextBuffer.flacBuffer);
             }
             break;
         case mp3:
 
             if(drmp3_init(pMP3, lfsReadProc, lfsSeekProc, NULL, NULL, audioFile, NULL)){
-                Serial.printf("%d采样率， %d声道数\n", pMP3->sampleRate, pMP3->channels);
                 audioI2S.reset(pMP3->sampleRate, pMP3->channels);
                 setupDMAChain(16);
                 pNextBuffer.mp3Buff = buffer_A.bufferMP3;
@@ -149,11 +149,12 @@ int AudioPlayer::play(File* audio, format mode) {
                 for(int i = 0; i < framesRead * pMP3->channels; i++){ 
                     pNextBuffer.mp3Buff[i] = ((int32_t)(pNextBuffer.mp3Buff[i]) * (uint32_t)gain) >> 14;
                 }
-                std::swap(pPlayBuffer, pNextBuffer);
+                std::swap(pPlayBuffer.mp3Buff, pNextBuffer.mp3Buff);
                 dma_channel_set_read_addr(dmaChannel, pPlayBuffer.mp3Buff, false);
                 dma_channel_set_trans_count(dmaChannel, framesRead * pMP3->channels, true);
                 irq_set_enabled(DMA_IRQ_0, true);
                 isPlaying = true;
+                framesRead = drmp3_read_pcm_frames_s16(pMP3, PCM_FRAME_COUNT, pNextBuffer.mp3Buff);
             }
             break;
         default:

@@ -10,7 +10,7 @@
 #include <hardware/dma.h>
 #include <hardware/irq.h>
 #include "LittleFS.h"
-#include "Audio_i2s_PIO.h"  // 包含 AudioI2S 类的头文件
+#include "audio_i2s_PIO.h"  // 包含 AudioI2S 类的头文件
 
 
 
@@ -18,7 +18,7 @@
 #define SD_CMD_PIN 9
 #define SD_DATA_PIN 10
 
-#define PCM_FRAME_COUNT 2048   // 每个缓存区的帧数
+#define PCM_FRAME_COUNT 8192  // 每个缓存区的帧数
 #define CHANNELS 2             // 假设双声道
 #define BUFFER_SIZE (PCM_FRAME_COUNT * CHANNELS)
 
